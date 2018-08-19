@@ -9,6 +9,47 @@ from sklearn.metrics import average_precision_score
 from train.dataset import Dataset
 from train.data_processing import plane_to_loc
 
+def get_architecture(shape):
+    n_boxes = shape[0] // 4
+
+    x_in = Input(shape)
+
+    x = x_in
+
+    x = Conv2D(32, 5, strides=(2, 2), padding='same')(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU()(x)
+
+    x = Conv2D(32, 3, strides=(1, 1), padding='same')(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU()(x)
+
+    x = MaxPool2D(2)(x)
+
+    x = Conv2D(64, 3, strides=(1, 1), padding='same')(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU()(x)
+    x = Dropout(0.2)(x)
+
+    x = Conv2D(128, 3, strides=(1, 1), padding='same')(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU()(x)
+    x = Dropout(0.3)(x)
+
+    x = Conv2D(1, 1)(x)
+
+    x = Flatten()(x)
+    x = Softmax()(x)
+    x = Reshape((n_boxes, n_boxes))(x)
+
+    x_out = x
+
+    model = KModel(inputs=x_in, outputs=x_out)
+    opt = Adam(lr=1e-3)
+    model.compile(loss=WeightedBinaryCrossentropy(500), optimizer=opt)
+
+    return model
+
 class WeightedBinaryCrossentropy(float):
     def __call__(self, y_true, y_pred):
         return tf.keras.backend.binary_crossentropy(y_true, y_pred) + \
@@ -22,71 +63,30 @@ class CNNModel():
         self.train_dataset = Dataset(train_vids)
         self.all_dataset = Dataset(train_vids + valid_vids)
 
-        self.architecture = self.get_architecture(1e-3, print_sum)
+        input_size = self.train_dataset.params['input_size']
+        n_diffs = self.train_dataset.params['n_diffs']
+        shape = (input_size, input_size, 6 + 6*n_diffs)
+        self.keras_model = get_architecture(shape)
+        if print_sum:
+            print(self.keras_model.summary())
 
         self.train_steps = sum(self.train_dataset.videos[video_num].chunk_cnt for video_num in train_vids)
 
         self.trained_epochs = 0
         self.learning_rates = []
 
-    def get_architecture(self, lr, print_sum):
-        input_size = self.train_dataset.params['input_size']
-        n_diffs = self.train_dataset.params['n_diffs']
-        shape = (input_size, input_size, 6 + 6*n_diffs)
-
-        x_in = Input(shape)
-
-        x = x_in
-
-        x = Conv2D(32, 5, strides=(2, 2), padding='same')(x)
-        x = BatchNormalization()(x)
-        x = LeakyReLU()(x)
-
-        x = Conv2D(32, 3, strides=(1, 1), padding='same')(x)
-        x = BatchNormalization()(x)
-        x = LeakyReLU()(x)
-
-        x = MaxPool2D(2)(x)
-
-        x = Conv2D(64, 3, strides=(1, 1), padding='same')(x)
-        x = BatchNormalization()(x)
-        x = LeakyReLU()(x)
-        x = Dropout(0.2)(x)
-
-        x = Conv2D(128, 3, strides=(1, 1), padding='same')(x)
-        x = BatchNormalization()(x)
-        x = LeakyReLU()(x)
-        x = Dropout(0.3)(x)
-
-        x = Conv2D(1, 1)(x)
-
-        x = Flatten()(x)
-        x = Softmax()(x)
-        x = Reshape((input_size // 4, input_size // 4))(x)
-
-        x_out = x
-
-        model = KModel(inputs=x_in, outputs=x_out)
-        opt = Adam(lr=lr)
-        model.compile(loss=WeightedBinaryCrossentropy(500), optimizer=opt)
-
-        if print_sum:
-            print(model.summary())
-
-        return model
-
     def train(self, lr, epochs, **kwargs):
-        K.set_value(self.architecture.optimizer.lr, lr)
+        K.set_value(self.keras_model.optimizer.lr, lr)
 
-        self.architecture.fit_generator(iter(self.train_dataset),
-                                  steps_per_epoch=self.train_steps,
-                                  epochs=epochs, **kwargs)
+        self.keras_model.fit_generator(iter(self.train_dataset),
+                                       steps_per_epoch=self.train_steps,
+                                       epochs=epochs, **kwargs)
 
         self.trained_epochs += epochs
         self.learning_rates += [lr]*epochs
 
     def save_weights(self, filename):
-        self.architecture.save_weights(filename)
+        self.keras_model.save_weights(filename)
 
     def evaluate(self, video_nums='valid'):
         if video_nums == 'valid':
@@ -102,7 +102,7 @@ class CNNModel():
                     yield self.all_dataset.videos[video_num][chunk_num][i]
 
         y_true = np.concatenate(list(generator(1)), axis=0)
-        y_pred = self.architecture.predict_generator(generator(0), steps=steps, verbose=1)
+        y_pred = self.keras_model.predict_generator(generator(0), steps=steps, verbose=1)
 
         ap_score = average_precision_score(y_true.flatten(), y_pred.flatten())
 

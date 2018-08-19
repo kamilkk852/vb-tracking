@@ -61,11 +61,9 @@ class VideoData():
         if self.data_paths:
             self.remove()
 
-        self.params['chunk_size'] = kwargs.get('chunk_size', DEFAULT_PARAMS['chunk_size'])
-        self.params['speed_cutoff'] = kwargs.get('speed_cutoff', DEFAULT_PARAMS['speed_cutoff'])
-        self.params['input_size'] = kwargs.get('input_size', DEFAULT_PARAMS['input_size'])
-        self.params['n_boxes'] = kwargs.get('n_boxes', DEFAULT_PARAMS['n_boxes'])
-        self.params['n_diffs'] = kwargs.get('n_diffs', DEFAULT_PARAMS['n_diffs'])
+        for arg in kwargs:
+            self.params[arg] = kwargs.get(arg)
+
         self.params['step'] = int(np.ceil(0.25 / self.params['speed_cutoff'] * self.freq))
 
         frames = get_frames(self.video_path, self.frame_nums, self.params['input_size'])
