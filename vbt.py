@@ -121,7 +121,8 @@ def particle_model(X, cnn_preds):
     preds = np.array(preds) / input_size
     return preds
 
-def predict(video_path, frame_nums, freq, weights_path='train/weights.h5', **kwargs):
+def predict(video_path, frame_nums, freq, **kwargs):
+    weights_path = kwargs.get('weights_path', 'train/weights.h5')
     model = kwargs.get('model', 'particle_model')
     threshold = kwargs.get('threshold', 0.75)
 
