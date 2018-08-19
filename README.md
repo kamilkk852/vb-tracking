@@ -29,7 +29,7 @@ optimalization. But you can already try it for your own. Download the repository
 
 ```python
 import vbt
-ims, preds = vbt.predict(video_path='sample_video.mp4', frame_nums=list(range(10, 100)), fps=120)
+ims, preds = vbt.predict(video_path='sample_video.mp4', frame_nums=list(range(10, 100)), freq=120)
 ```
 
 Wait for a few seconds and that's it! Array ims consists of specified frames, and predictions are stored in preds array. These are
