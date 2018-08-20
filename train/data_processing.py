@@ -101,22 +101,15 @@ def calc_diffs(frames, step, n_diffs):
 
     return diffs
 
-def calc_acc_diff(frames, thres, frames_cnt=10):
-    amax = frames_cnt
-    intensity = np.mean(frames, axis=3)
-    acc_diff = np.zeros(intensity.shape)
-    norm_acc_diff = np.zeros(intensity.shape)
+def calc_acc_diff(frames, thres, acc_size=10):
+    intensity = np.mean(frames, axis=3, keepdims=True)
+    acc_diff = np.ones(intensity.shape)
 
-    for i in range(intensity.shape[0]):
-        if i == 0:
-            acc_diff[i] = amax
-        else:
-            acc_diff[i] = acc_diff[i-1]-1
-            acc_diff[i][np.abs(intensity[i]-intensity[i-1]) > thres] = amax
+    for i in range(1, intensity.shape[0]):
+        acc_diff[i] = np.maximum(0, acc_diff[i-1] - 1. / acc_size)
+        acc_diff[i][np.abs(intensity[i] - intensity[i-1]) > thres] = 1
 
-        norm_acc_diff[i] = np.clip(acc_diff[i], 0, frames_cnt)/frames_cnt
-
-    return np.expand_dims(norm_acc_diff, axis=3)
+    return acc_diff
 
 def get_input(frames, step, n_diffs):
     diffs = calc_diffs(frames, step, n_diffs)
