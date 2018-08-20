@@ -10,31 +10,27 @@ from train.dataset import Dataset
 from train.data_processing import plane_to_loc
 
 def get_architecture(shape):
+    def cnn_layer(x, filters, kernel_size, stride, dropout=0):
+        x = Conv2D(filters, kernel_size, strides=(stride, stride), padding='same')(x)
+        x = BatchNormalization()(x)
+        x = LeakyReLU()(x)
+        if dropout:
+            x = Dropout(dropout)(x)
+        return x
+
     n_boxes = shape[0] // 4
 
     x_in = Input(shape)
 
     x = x_in
 
-    x = Conv2D(32, 5, strides=(2, 2), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = LeakyReLU()(x)
-
-    x = Conv2D(32, 3, strides=(1, 1), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = LeakyReLU()(x)
+    x = cnn_layer(x, 32, 5, 2)
+    x = cnn_layer(x, 32, 3, 1)
 
     x = MaxPool2D(2)(x)
 
-    x = Conv2D(64, 3, strides=(1, 1), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = LeakyReLU()(x)
-    x = Dropout(0.2)(x)
-
-    x = Conv2D(128, 3, strides=(1, 1), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = LeakyReLU()(x)
-    x = Dropout(0.3)(x)
+    x = cnn_layer(x, 64, 3, 1, dropout=0.2)
+    x = cnn_layer(x, 128, 3, 1, dropout=0.3)
 
     x = Conv2D(1, 1)(x)
 

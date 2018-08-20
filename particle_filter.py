@@ -1,5 +1,8 @@
 import numpy as np
 
+STEP_SIZE = 6
+N_PARTICLES = 100
+
 def correct_pred(acc_diff, pred_pos, window=30):
     x_loc, y_loc = pred_pos
     start_x = int(max(0, x_loc - window))
@@ -36,22 +39,31 @@ def resample(weights):
     return indices
 
 
-def predict(pos, sequence, stepsize=6, n=100):
+def predict(pos, sequence, **kwargs):
+    step_size = kwargs.get('step_size', STEP_SIZE)
+    n_particles = kwargs.get('n_particles', N_PARTICLES)
+    reverse = kwargs.get('reverse', False)
+
     preds = [pos]
 
-    seq = iter(sequence)
-    x = np.ones((n, 2), int) * pos                   # Initial position
-    f0 = next(seq)[tuple(pos)] * np.ones(n)         # Target colour model
+    if reverse:
+        seq = iter(reversed(sequence))
+    else: seq = iter(sequence)
+
+    x = np.ones((n_particles, 2), int) * pos                   # Initial position
+    f0 = next(seq)[tuple(pos)] * np.ones(n_particles)         # Target colour model
 
     for im in seq:
-        np.add(x, np.random.uniform(-stepsize, stepsize, x.shape),
+        np.add(x, np.random.uniform(-step_size, step_size, x.shape),
                out=x, casting="unsafe")  # Particle motion model: uniform step
         x = x.clip(np.zeros(2), np.array(im.shape)-1).astype(int) # Clip out-of-bounds particles
         f = im[tuple(x.T)]                         # Measure particle colours
         w = 1./(1. + (f0-f)**2)                    # Weight~ inverse quadratic colour distance
         w /= sum(w)                                 # Normalize w
         preds.append(np.sum(x.T*w, axis=1))     # Return expected position, particles and weights
-        if 1./sum(w**2) < n/2.:                     # If particle cloud degenerate:
+        if 1./sum(w**2) < n_particles/2.:                     # If particle cloud degenerate:
             x = x[resample(w), :]
 
+    if reverse:
+        return list(reversed(preds))
     return preds

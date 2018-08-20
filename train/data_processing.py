@@ -45,48 +45,43 @@ def read_kva_files(kva_paths, add_diameter=False):
 
     return frame_nums, locs
 
+def process_frame(frame, target_size):
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.uint8)
+
+    video_shape = np.array(frame.shape[:2])
+    max_dim = np.max(video_shape)
+    resized_shape = (video_shape * target_size / max_dim).astype(int)
+
+    resized_frame = cv2.resize(frame, tuple(reversed(resized_shape)))
+
+    padding = ((0, target_size - resized_shape[0]),
+               (0, target_size - resized_shape[1]),
+               (0, 0))
+    padded_frame = np.pad(resized_frame, padding,
+                          mode='constant', constant_values=0)
+
+    return padded_frame
+
 def get_frames(video_path, frame_nums, input_size, print_breaks=False):
     cap = cv2.VideoCapture(video_path)
 
-    frames = []
+    frames = np.zeros((len(frame_nums), input_size, input_size, 3))
 
-    def resize_and_pad(frame):
-        video_shape = np.array(frame.shape[:2])
-        max_dim = np.max(video_shape)
-        resized_shape = (video_shape * input_size / max_dim).astype(int)
+    for i, current_num in enumerate(frame_nums):
+        previous_num = frame_nums[i-1]
+        step = current_num - previous_num
 
-        resized_frame = cv2.resize(frame, tuple(reversed(resized_shape)))
-
-        padding = ((0, input_size - resized_shape[0]),
-                   (0, input_size - resized_shape[1]),
-                   (0, 0))
-        padded_frame = np.pad(resized_frame, padding,
-                              mode='constant', constant_values=0)
-
-        return padded_frame
-
-    previous_num = 0
-
-    for i in range(len(frame_nums)):
-        if i > 0:
-            previous_num = frame_nums[i-1]
-
-        current_num = frame_nums[i]
-
-        if current_num - previous_num != 1:
+        if step != 1:
             cap.set(1, current_num)
-            if print_breaks and current_num != 0 and current_num - previous_num <= 3:
-                print("Small break at: {}->{}".format(previous_num + 1, current_num + 1))
+
+        if print_breaks and i != 0 and step <= 3:
+            print("Small break at: {}->{}".format(previous_num + 1, current_num + 1))
+
         ret, frame = cap.read()
 
         if ret:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.uint8)
-            frame = resize_and_pad(frame)
-            frames.append(frame)
+            frames[i] = process_frame(frame, input_size)
         else: print('Could not load frame {}.'.format(i+1))
-
-    assert frames
-    frames = np.array(frames)
 
     return frames
 

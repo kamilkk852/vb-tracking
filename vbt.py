@@ -28,7 +28,8 @@ class Video():
 
         return X
 
-def get_model(weights_path, **kwargs):
+def get_model(**kwargs):
+    weights_path = kwargs.get('weights_path', 'train/weights.h5')
     input_size = kwargs.get('input_size', 200)
     n_diffs = kwargs.get('n_diffs', 1)
     shape = (input_size, input_size, 6 + 6*n_diffs)
@@ -41,109 +42,96 @@ def get_model(weights_path, **kwargs):
 def no_move_model(cnn_preds):
     n = cnn_preds.shape[1]
     argw = np.argwhere(cnn_preds)
-
     argwhere_to_loc = lambda argw: (np.array(argw) + 0.5) / n
 
-    preds = []
+    preds = np.zeros((cnn_preds.shape[0], 2))
 
-    for i in range(argw.shape[0] + 1):
-        loc = argwhere_to_loc(argw[i - 1, 1:])
-        if i == 0:
-            loc = argwhere_to_loc(argw[i, 1:])
-            preds += [loc]*argw[i, 0]
-        elif i < argw.shape[0]:
-            preds += [loc]*(argw[i, 0] - argw[i - 1, 0])
-        else:
-            preds += [loc]*(cnn_preds.shape[0] - argw[i - 1, 0])
+    preds[:argw[0, 0]] = argwhere_to_loc(argw[0, 1:])
 
-    preds = np.array(preds)
+    for i in range(1, argw.shape[0]):
+        preds[argw[i-1, 0]:argw[i, 0]] = argwhere_to_loc(argw[i-1, 1:])
+
+    preds[argw[-1, 0]:] = argwhere_to_loc(argw[-1, 1:])
 
     return preds
 
 def linear_model(cnn_preds):
     n = cnn_preds.shape[1]
     argw = np.argwhere(cnn_preds)
-
     argwhere_to_loc = lambda argw: (np.array(argw) + 0.5) / n
 
-    preds = []
+    preds = np.zeros((cnn_preds.shape[0], 2))
 
-    for i in range(argw.shape[0] + 1):
-        if i == 0:
-            loc = argwhere_to_loc(argw[i, 1:])
-            preds += [loc]*argw[i, 0]
-        elif i < argw.shape[0]:
-            loc1 = argwhere_to_loc(argw[i - 1, 1:])
-            loc2 = argwhere_to_loc(argw[i, 1:])
-            diff = loc2 - loc1
-            step = diff / (argw[i, 0] - argw[i - 1, 0])
-            preds += [loc1 + j*step for j in range(argw[i, 0] - argw[i - 1, 0])]
-        else:
-            loc = argwhere_to_loc(argw[i - 1, 1:])
-            preds += [loc]*(cnn_preds.shape[0] - argw[i - 1, 0])
+    preds[:argw[0, 0]] = argwhere_to_loc(argw[0, 1:])
 
-    preds = np.array(preds)
+    for i in range(1, argw.shape[0]):
+        loc1, loc2 = map(argwhere_to_loc, argw[i-1:i, 1:])
+        n_frames = argw[i, 0] - argw[i - 1, 0]
+        step = (loc2 - loc1) / n_frames
+        preds[argw[i-1, 0]:argw[i, 0]] = [loc1 + j*step for j in range(n_frames)]
+
+    preds[argw[-1, 0]:] = argwhere_to_loc(argw[-1, 1:])
 
     return preds
 
-def particle_model(X, cnn_preds):
+def particle_model(acc_diff, cnn_preds):
     argw = np.argwhere(cnn_preds)
-    input_size = X.shape[1]
+    input_size = acc_diff.shape[1]
     n = cnn_preds.shape[1]
 
+    preds = np.zeros((cnn_preds.shape[0], 2))
+
     if argw.shape[0] == 0:
-        return np.zeros(cnn_preds.shape[0])
+        return preds
 
-    preds = []
-
-    acc_diff = (X[:, :, :, 3]*255).astype(np.int32)
-
-    argwhere_to_loc = lambda argw: ((np.array(argw) + 0.5) / n * input_size).astype(int)
+    argwhere_to_pixel_loc = lambda argw: ((np.array(argw) + 0.5) / n * input_size).astype(int)
     get_sequence = lambda st, end: list(acc_diff[st:end])
 
-    x0 = argwhere_to_loc(argw[0, 1:])
-    seq = list(reversed(get_sequence(0, argw[0, 0] + 1)))
-    pred_pos = particle_filter.predict(x0, seq)
-    preds += list(reversed(pred_pos[1:]))
+    start_frame = argw[0, 0]
+    x0 = argwhere_to_pixel_loc(argw[0, 1:])
+    seq = get_sequence(0, start_frame + 1)
+    preds[:start_frame] = particle_filter.predict(x0, seq, reverse=True)[:-1]
 
     for i in range(argw.shape[0]):
-        st = argw[i, 0]
+        start_frame = argw[i, 0]
         if i < argw.shape[0] - 1:
-            end = argw[i + 1, 0]
+            end_frame = argw[i + 1, 0]
         else:
-            end = cnn_preds.shape[0]
+            end_frame = cnn_preds.shape[0]
 
-        seq = get_sequence(st, end)
-        x0 = argwhere_to_loc(argw[i, 1:])
-        pred_pos = particle_filter.predict(x0, seq)
-        preds += pred_pos
+        x0 = argwhere_to_pixel_loc(argw[i, 1:])
+        seq = get_sequence(start_frame, end_frame)
+        preds[start_frame:end_frame] = particle_filter.predict(x0, seq)
 
-    preds = np.array(preds) / input_size
+    preds /= input_size
     return preds
 
-def predict(video_path, frame_nums, freq, **kwargs):
-    weights_path = kwargs.get('weights_path', 'train/weights.h5')
+def predict(video_path, frame_nums, **kwargs):
     model = kwargs.get('model', 'particle_model')
     threshold = kwargs.get('threshold', 0.75)
+    freq = kwargs.get('freq', 120)
 
     video = Video(video_path, frame_nums, freq)
     X = video.process(**kwargs)
 
-    cnn_model = get_model(weights_path)
+    cnn_model = get_model(**kwargs)
     cnn_preds = cnn_model.predict(X, batch_size=32, verbose=0)
 
+    frames = X[:, :, :, :3]
+
     if model == 'cnn_model':
-        return X[:, :, :, :3], plane_to_loc(cnn_preds)
+        return frames, plane_to_loc(cnn_preds)
     elif model == 'no_move_model':
-        return X[:, :, :, :3], no_move_model(cnn_preds > threshold)
+        return frames, no_move_model(cnn_preds > threshold)
     elif model == 'linear_model':
-        return X[:, :, :, :3], linear_model(cnn_preds > threshold)
+        return frames, linear_model(cnn_preds > threshold)
     elif model == 'particle_model':
-        return X[:, :, :, :3], particle_model(X, cnn_preds > threshold)
+        acc_diff = (X[:, :, :, 3]*255).astype(np.int32)
+        return frames, particle_model(acc_diff, cnn_preds > threshold)
 
     return None
 
-def short_predict(cnn_preds, X=None, **kwargs):
+def short_predict(cnn_preds, **kwargs):
     model = kwargs.get('model', 'particle_model')
     threshold = kwargs.get('threshold', 0.75)
 
@@ -154,6 +142,7 @@ def short_predict(cnn_preds, X=None, **kwargs):
     elif model == 'linear_model':
         return linear_model(cnn_preds > threshold)
     elif model == 'particle_model':
-        return particle_model(X, cnn_preds > threshold)
+        acc_diff = (kwargs.get('acc_diff')*255).astype(np.int32)
+        return particle_model(acc_diff, cnn_preds > threshold)
 
     return None
