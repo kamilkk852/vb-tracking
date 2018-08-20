@@ -3,30 +3,6 @@ import numpy as np
 STEP_SIZE = 6
 N_PARTICLES = 100
 
-def correct_pred(acc_diff, pred_pos, window=30):
-    x_loc, y_loc = pred_pos
-    start_x = int(max(0, x_loc - window))
-    start_y = int(max(0, y_loc - window))
-    end_x = int(min(acc_diff.shape[0], x_loc + window))
-    end_y = int(min(acc_diff.shape[1], y_loc + window))
-
-    y, x = np.meshgrid(np.arange(end_x - start_x), np.arange(end_x - start_x))
-
-    dis_x = x - (x_loc - start_x)
-    dis_y = y - (y_loc - start_y)
-
-    acc_diff = acc_diff[start_x:end_x, start_y:end_y]
-
-    brightest = acc_diff*(acc_diff == np.max(acc_diff))
-
-    dis = dis_x**2 + dis_y**2
-    dis *= brightest
-
-    pred_loc = np.argwhere(dis == np.min(dis[dis > 0])).mean(axis=0)
-    pred_loc += np.array([start_x, start_y])
-
-    return pred_loc
-
 def resample(weights):
     n = len(weights)
     indices = []
