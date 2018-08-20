@@ -10,7 +10,7 @@ from train.dataset import Dataset
 from train.data_processing import plane_to_loc
 
 def get_architecture(shape):
-    def cnn_layer(x, filters, kernel_size, stride, dropout=0):
+    def cnn_layer(x, filters, kernel_size, stride=1, dropout=0):
         x = Conv2D(filters, kernel_size, strides=(stride, stride), padding='same')(x)
         x = BatchNormalization()(x)
         x = LeakyReLU()(x)
@@ -24,13 +24,13 @@ def get_architecture(shape):
 
     x = x_in
 
-    x = cnn_layer(x, 32, 5, 2)
-    x = cnn_layer(x, 32, 3, 1)
+    x = cnn_layer(x, 32, 5, stride=2)
+    x = cnn_layer(x, 32, 3)
 
     x = MaxPool2D(2)(x)
 
-    x = cnn_layer(x, 64, 3, 1, dropout=0.2)
-    x = cnn_layer(x, 128, 3, 1, dropout=0.3)
+    x = cnn_layer(x, 64, 3, dropout=0.2)
+    x = cnn_layer(x, 128, 3, dropout=0.3)
 
     x = Conv2D(1, 1)(x)
 
@@ -45,6 +45,14 @@ def get_architecture(shape):
     model.compile(loss=WeightedBinaryCrossentropy(500), optimizer=opt)
 
     return model
+
+def median_loc_err(dataset, y_pred):
+    true_locs = np.concatenate([video_data.locs for video_data in dataset.videos.values()],
+                               axis=0)
+    pred_locs = plane_to_loc(y_pred)
+
+    diff = true_locs - pred_locs
+    return np.median(np.sqrt(np.sum(diff**2, axis=1)))
 
 class WeightedBinaryCrossentropy(float):
     def __call__(self, y_true, y_pred):
@@ -66,8 +74,6 @@ class CNNModel():
         if print_sum:
             print(self.keras_model.summary())
 
-        self.train_steps = sum(self.train_dataset.videos[video_num].chunk_cnt for video_num in train_vids)
-
         self.trained_epochs = 0
         self.learning_rates = []
 
@@ -75,7 +81,7 @@ class CNNModel():
         K.set_value(self.keras_model.optimizer.lr, lr)
 
         self.keras_model.fit_generator(iter(self.train_dataset),
-                                       steps_per_epoch=self.train_steps,
+                                       steps_per_epoch=len(self.train_dataset),
                                        epochs=epochs, **kwargs)
 
         self.trained_epochs += epochs
@@ -90,27 +96,16 @@ class CNNModel():
         elif video_nums == 'train':
             video_nums = self.train_vids
 
-        steps = sum(self.all_dataset.videos[video_num].chunk_cnt for video_num in video_nums)
+        dataset = Dataset(video_nums)
 
-        def generator(i):
-            for video_num in video_nums:
-                for chunk_num in range(self.all_dataset.videos[video_num].chunk_cnt):
-                    yield self.all_dataset.videos[video_num][chunk_num][i]
-
-        y_true = np.concatenate(list(generator(1)), axis=0)
-        y_pred = self.keras_model.predict_generator(generator(0), steps=steps, verbose=1)
+        y_true = np.concatenate(list(dataset.output_generator()), axis=0)
+        y_pred = self.keras_model.predict_generator(dataset.input_generator(),
+                                                    steps=len(dataset), verbose=1)
 
         ap_score = average_precision_score(y_true.flatten(), y_pred.flatten())
-
-        true_locs = np.concatenate([self.all_dataset.videos[video_num].locs \
-                                    for video_num in video_nums], axis=0)
-        pred_locs = plane_to_loc(y_pred)
-
-        diff = true_locs - pred_locs
-
-        loc_err_score = np.median(np.sqrt(diff[:, 0]**2 + diff[:, 1]**2))
+        median_loc_err_score = median_loc_err(dataset, y_pred)
 
         print('AP: {}'.format(ap_score))
-        print('MEDIAN LOC_ERR: {}'.format(loc_err_score))
+        print('MEDIAN LOC_ERR: {}'.format(median_loc_err_score))
 
         return y_true, y_pred

@@ -19,9 +19,10 @@ class VideoData():
         self.video_num = video_num
         self.video_num_str = str(video_num).zfill(4)
 
-        self.video_path = glob('{}video{}.*'.format(WORKING_PATH, self.video_num_str))[0]
-        self.kva_paths = sorted(glob('{}video{}_*.kva'.format(WORKING_PATH, self.video_num_str)))
-        self.params_path = '{}data/params_{}.json'.format(WORKING_PATH, self.video_num_str)
+        self.video_path = glob('{}/video{}.*'.format(WORKING_PATH, self.video_num_str))[0]
+        self.kva_paths = sorted(glob('{}/video{}_*.kva'.format(WORKING_PATH, self.video_num_str)))
+        os.makedirs('{}/data'.format(WORKING_PATH), exist_ok=True)
+        self.params_path = '{}/data/params_{}.json'.format(WORKING_PATH, self.video_num_str)
 
         cap = cv2.VideoCapture(self.video_path)
         self.video_shape = (int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
@@ -40,52 +41,52 @@ class VideoData():
             else: start = i.start
 
             if i.stop is None:
-                stop = self.chunk_cnt
+                stop = self.__len__()
             else: stop = i.stop
+        else: start, stop = i, i + 1
 
+        def load_chunks(start, stop):
             X, y = zip(*(pickle.load(open(self.data_paths[j], 'rb')) for j in range(start, stop)))
             X, y = map(lambda x: np.concatenate(x, axis=0), (X, y))
-        else: X, y = pickle.load(open(self.data_paths[i], 'rb'))
+            return X, y
 
-        return X, y
+        return load_chunks(start, stop)
 
     def __iter__(self):
         while True:
-            chunk_num = np.random.randint(0, self.chunk_cnt)
+            chunk_num = np.random.randint(self.__len__())
             yield self.__getitem__(chunk_num)
 
-    def process(self, **kwargs):
-        os.makedirs('{}data'.format(WORKING_PATH), exist_ok=True)
+    def __len__(self):
+        return len(self.data_paths)
 
-        if self.data_paths:
-            self.remove()
+    def process(self, **kwargs):
+        self.remove()
 
         for arg in kwargs:
             self.params[arg] = kwargs.get(arg)
 
         self.params['step'] = int(np.ceil(0.25 / self.params['speed_cutoff'] * self.freq))
+        json.dump(self.params, open(self.params_path, 'w'))
 
         frames = get_frames(self.video_path, self.frame_nums, self.params['input_size'])
         X = get_input(frames, self.params['step'], self.params['n_diffs'])
         y = get_output(self.locs, self.params['n_boxes'])
-        save_path = '{}data/data{}_'.format(WORKING_PATH, self.video_num_str)
+        save_path = '{}/data/data{}_'.format(WORKING_PATH, self.video_num_str)
         dump_chunks(X, y, save_path, self.params['chunk_size'])
-
-        json.dump(self.params, open(self.params_path, 'w'))
 
         self.update()
         print('Data from video {} has been saved!'.format(self.video_num))
 
     def update(self):
-        self.data_paths = sorted(glob('{}data/data{}_*'.format(WORKING_PATH,
-                                                               self.video_num_str)))
+        self.data_paths = sorted(glob('{}/data/data{}_*'.format(WORKING_PATH,
+                                                                self.video_num_str)))
         self.processed = os.path.isfile(self.params_path)
         if self.processed:
             self.params = json.load(open(self.params_path, 'r'))
         else: self.params = copy(DEFAULT_PARAMS)
         self.params['step'] = int(np.ceil(0.25 / self.params['speed_cutoff'] * self.freq))
         self.margin = self.params['step'] + self.params['n_diffs'] - 1
-        self.chunk_cnt = len(self.data_paths)
 
     def remove(self):
         if self.processed:
@@ -100,7 +101,7 @@ class Dataset():
     def __init__(self, video_nums):
         self.videos = dict((video_num, VideoData(video_num)) for video_num in video_nums)
         assert all(video_data.processed for video_data in self.videos.values()), \
-        'Some videos have not been processed yet'
+        'Some videos have not been processed yet.'
 
         self.params = list(self.videos.values())[0].params
         del self.params['step']
@@ -114,8 +115,22 @@ class Dataset():
     def __getitem__(self, i):
         return self.videos[i][:]
 
+    def __len__(self):
+        return sum(len(video_data) for video_data in self.videos.values())
+
+    def nonrandom_generator(self, i):
+        for video_data in self.videos.values():
+            for chunk_num in range(len(video_data)):
+                yield video_data[chunk_num][i]
+
+    def input_generator(self):
+        return self.nonrandom_generator(0)
+
+    def output_generator(self):
+        return self.nonrandom_generator(1)
+
 def create(video_nums, **kwargs):
-    os.makedirs('{}data'.format(WORKING_PATH), exist_ok=True)
+    os.makedirs('{}/data'.format(WORKING_PATH), exist_ok=True)
 
     for video_num in video_nums:
         video_data = VideoData(video_num)
@@ -123,4 +138,4 @@ def create(video_nums, **kwargs):
 
 def clear():
     import shutil
-    shutil.rmtree(WORKING_PATH + 'data')
+    shutil.rmtree(WORKING_PATH + '/data')
