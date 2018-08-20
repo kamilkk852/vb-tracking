@@ -65,7 +65,6 @@ class CNNModel():
         self.valid_vids = valid_vids
 
         self.train_dataset = Dataset(train_vids)
-        self.all_dataset = Dataset(train_vids + valid_vids)
 
         input_size = self.train_dataset.params['input_size']
         n_diffs = self.train_dataset.params['n_diffs']
