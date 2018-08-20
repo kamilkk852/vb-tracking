@@ -1,9 +1,11 @@
 import cv2
 import numpy as np
 import pickle
+import json
 import xml.etree.ElementTree as ET
 
-DIFFS_STD = 6
+SETTINGS = json.load(open('train/settings.json', 'r'))
+DIFFS_STD = SETTINGS['DIFFS_STD']
 
 def read_kva_files(kva_paths, add_diameter=False):
     locs = []

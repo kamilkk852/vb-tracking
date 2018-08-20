@@ -8,12 +8,11 @@ from glob import glob
 from copy import copy
 from train.data_processing import read_kva_files, get_frames, get_input, get_output, dump_chunks
 
-WORKING_PATH = 'E:/Volleyball Tracking files/'
-FREQS_PATH = WORKING_PATH + 'freqs.json'
-FREQS = json.load(open(FREQS_PATH, 'r'))
-DIFFS_STD = 6
-DEFAULT_PARAMS = {'chunk_size': 4, 'speed_cutoff': 10, 'input_size': 200,
-                  'n_boxes': 50, 'n_diffs': 1, 'step': 1}
+SETTINGS = json.load(open('train/settings.json', 'r'))
+DEFAULT_PARAMS = SETTINGS['DEFAULT_PARAMS']
+DIFFS_STD = SETTINGS['DIFFS_STD']
+WORKING_PATH = SETTINGS['WORKING_PATH']
+FREQS = SETTINGS['FREQS']
 
 class VideoData():
     def __init__(self, video_num):
