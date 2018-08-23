@@ -42,6 +42,6 @@ For the first example I've chosen a video, for which the results seemed represen
 
 ![](https://github.com/kamilkk852/vb-tracking/blob/master/sample_predictions1.gif)
 
-The second example is just the first volleyball video meeting conditions from Introduction, which I've found on youtube. Results are better here.
+The second example is just a random video from youtube that meets conditions from Introduction. Results are better here.
 
 ![](https://github.com/kamilkk852/vb-tracking/blob/master/sample_predictions2.gif)
