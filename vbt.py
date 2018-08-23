@@ -6,6 +6,9 @@ from train.model import get_architecture
 from copy import copy
 import particle_filter
 
+DEFAULT_PROB_THRESHOLD = 0.75
+DEFAULT_VIDEO_FREQUENCY = 120
+
 class Video():
     def __init__(self, video_path, frame_nums, freq):
         self.video_path = video_path
@@ -88,9 +91,11 @@ def particle_model(acc_diff, cnn_preds):
     get_sequence = lambda st, end: list(acc_diff[st:end])
 
     start_frame = argw[0, 0]
-    x0 = argwhere_to_pixel_loc(argw[0, 1:])
-    seq = get_sequence(0, start_frame + 1)
-    preds[:start_frame] = particle_filter.predict(x0, seq, reverse=True)[:-1]
+
+    if start_frame > 0:
+        x0 = argwhere_to_pixel_loc(argw[0, 1:])
+        seq = get_sequence(0, start_frame + 1)
+        preds[:start_frame] = particle_filter.predict(x0, seq, reverse=True)[:-1]
 
     for i in range(argw.shape[0]):
         start_frame = argw[i, 0]
@@ -108,32 +113,36 @@ def particle_model(acc_diff, cnn_preds):
 
 def predict(video_path, frame_nums, **kwargs):
     model = kwargs.get('model', 'particle_model')
-    threshold = kwargs.get('threshold', 0.75)
-    freq = kwargs.get('freq', 120)
+    threshold = kwargs.get('threshold', DEFAULT_PROB_THRESHOLD)
+    freq = kwargs.get('freq', DEFAULT_VIDEO_FREQUENCY)
 
+    print('Processing video file...')
     video = Video(video_path, frame_nums, freq)
     X = video.process(**kwargs)
 
+    print('Making neural network predictions...')
     cnn_model = get_model(**kwargs)
-    cnn_preds = cnn_model.predict(X, batch_size=32, verbose=0)
+    cnn_preds = cnn_model.predict(X, batch_size=8, verbose=1)
 
     frames = X[:, :, :, :3]
 
     if model == 'cnn_model':
-        return frames, plane_to_loc(cnn_preds)
+        preds = plane_to_loc(cnn_preds)
     elif model == 'no_move_model':
-        return frames, no_move_model(cnn_preds > threshold)
+        preds = no_move_model(cnn_preds > threshold)
     elif model == 'linear_model':
-        return frames, linear_model(cnn_preds > threshold)
+        preds = linear_model(cnn_preds > threshold)
     elif model == 'particle_model':
+        print('Adding particle filter predictions...')
         acc_diff = (X[:, :, :, 3]*255).astype(np.int32)
-        return frames, particle_model(acc_diff, cnn_preds > threshold)
+        preds = particle_model(acc_diff, cnn_preds > threshold)
 
-    return None
+    print('Done!')
+    return frames, preds
 
 def short_predict(cnn_preds, **kwargs):
     model = kwargs.get('model', 'particle_model')
-    threshold = kwargs.get('threshold', 0.75)
+    threshold = kwargs.get('threshold', DEFAULT_PROB_THRESHOLD)
 
     if model == 'cnn_model':
         return plane_to_loc(cnn_preds)
