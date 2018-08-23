@@ -29,7 +29,7 @@ optimalization. But you can already try it for your own. Download the repository
 
 ```python
 import vbt
-ims, preds = vbt.predict(video_path='sample_video.mp4', frame_nums=list(range(10, 100)))
+ims, preds = vbt.predict(video_path='sample_video1.mp4', frame_nums=list(range(10, 100)))
 ```
 
 Wait for a few seconds and that's it! Array ims consists of specified frames, and predictions are stored in preds array. These are
@@ -39,7 +39,10 @@ relative predictions, so you have to multiply them by video size in order to hav
 
 ## Example results
 
-For the example I've chosen a video, for which the results seemed representative of the overall predictive power of the model - that
-is the position error is around the mean of all tested videos. So it sometimes does better and sometimes worse than here.
+For the first example I've chosen a video, for which the results seemed representative of the overall predictive power of the model - that is the position error is around the mean of all tested videos.
 
-![](https://github.com/kamilkk852/vb-tracking/blob/master/sample_predictions.gif)
+![](https://github.com/kamilkk852/vb-tracking/blob/master/sample_predictions1.gif)
+
+The second example is just the first volleyball video meeting conditions from Introduction, which I've found on youtube. Results are better here.
+
+![](https://github.com/kamilkk852/vb-tracking/blob/master/sample_predictions2.gif)
