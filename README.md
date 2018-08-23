@@ -22,10 +22,9 @@ Then I made my research and I found that in one paper they used something called
 I tried to apply this for my videos and this technique alone wasn't very useful. But when I combined it with my CNN model it resulted
 in quite nice (although still far from perfect) predictions (mean and median localization error dropped to 5-6% and 1-2% respectively). 
 
-## Code
+## Usage example
 
-The code is still far from optimal concerning prediction speed and memory usage, but it works. I'll be working on
-optimalization. But you can already try it for your own. Download the repository and run this code inside:
+Download the repository and run this code inside:
 
 ```python
 import vbt
@@ -35,9 +34,9 @@ ims, preds = vbt.predict(video_path='sample_video1.mp4', frame_nums=list(range(1
 Wait for a few seconds and that's it! Array ims consists of specified frames, and predictions are stored in preds array. These are
 relative predictions, so you have to multiply them by video size in order to have it in pixel format.
 
-(I strongly advice not to use more than 100-200 frame_nums at once. It may result in memory error.)
+(I strongly advice not to use more than 200-300 frame_nums at once. It may result in memory error.)
 
-## Example results
+## Example performance
 
 For the first example I've chosen a video, for which the results seemed representative of the overall predictive power of the model - that is the position error is around the mean of all tested videos.
 
