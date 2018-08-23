@@ -24,12 +24,12 @@ in quite nice (although still far from perfect) predictions (mean and median loc
 
 ## Code
 
-The code is still pretty ugly, far from optimal concerning prediction speed and memory usage, but it works. I'll be working on
+The code is still far from optimal concerning prediction speed and memory usage, but it works. I'll be working on
 optimalization. But you can already try it for your own. Download the repository and run this code inside:
 
 ```python
 import vbt
-ims, preds = vbt.predict(video_path='sample_video.mp4', frame_nums=list(range(10, 100)), freq=120)
+ims, preds = vbt.predict(video_path='sample_video.mp4', frame_nums=list(range(10, 100)))
 ```
 
 Wait for a few seconds and that's it! Array ims consists of specified frames, and predictions are stored in preds array. These are
